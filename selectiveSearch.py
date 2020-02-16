@@ -52,7 +52,15 @@ def hierarchical_grouping():
     """
     image = data.astronaut()
     regions = felzenszwalb(image, scale=100, sigma=0.5, min_size=50)
-    print(compute_color_similarity(image, regions, 1, 3))
+    # we can reduce compute cost by 2, because similarity matrix is symetric
+    similarity_regions = np.zeros((np.max(regions), np.max(regions)))
+    for i in range(np.max(regions)):
+        for j in range(np.max(regions)):
+            if i%25==0:
+                print("Index i: {}, j: {}".format(i, j))
+            similarity_regions[i, j] = compute_color_similarity(image, regions, i, j)
+    print(similarity_regions)
+
 
 
 if __name__ == '__main__':
