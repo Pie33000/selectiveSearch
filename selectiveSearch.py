@@ -1,9 +1,71 @@
 import numpy as np
 from skimage.segmentation import felzenszwalb
-from skimage.segmentation import mark_boundaries
 from skimage import data
-import matplotlib.pyplot as plt
+from skimage.color import rgb2yiq
 import collections
+from scipy import signal
+import scipy as sc
+import math as m
+
+def gaussian_kernel(k, s = 0.5):
+    # generate a (2k+1)x(2k+1) gaussian kernel with mean=0 and sigma = s
+    probs = [m.exp(-z*z/(2*s*s))/m.sqrt(2*m.pi*s*s) for z in range(-k,k+1)]
+    return np.outer(probs, probs)
+
+
+def find_all_neigbors(x, y, height, width):
+    neighbors = []
+    num_vertice = 0
+    for i in range(height):
+        for j in range(width):
+            if (i != x or j != y) and np.sqrt((np.power(i-x, 2)+np.power(j-y, 2))) <= 1:
+                neighbors.append([i, j, num_vertice])
+            num_vertice += 1
+    return neighbors
+
+
+def graph_based_segmentation(image, scale, sigma, min_size, sigma_x):
+    """
+    Felzenszwalb segmentation
+    :param image: a numpy array represents image with channel
+    :param scale:
+    :param sigma:
+    :param min_size: min size for a region
+    :return: a list of regions
+    [0 0 0 0]
+    [0 0 0 0]
+    [0 0 0 0]
+    [0 0 0 0]
+
+
+    """
+    matrix = np.random.randint(255, size=(4, 4, 3))
+    height, width, deep = matrix.shape
+    adj_matrix = np.zeros((height*width, height*width))
+    num_vertice = 0
+    degree_matrix = np.zeros((height*width, height*width))
+    seg_class = [i for i in range(height*width)]
+    for i in range(height):
+        for j in range(width):
+            sum_degree = 0
+            for neighbor in find_all_neigbors(i, j, height, width):
+                adj_matrix[num_vertice, neighbor[2]] = np.exp(
+                    -(m.fabs(np.sum(matrix[neighbor[0], neighbor[1], :]-matrix[i, j, :]))/sigma)
+                    -(np.sqrt((np.power(neighbor[0]-i, 2)+np.power(neighbor[1]-j, 2)))/sigma_x))
+                adj_matrix[neighbor[2], num_vertice] = np.exp(
+                    -(m.fabs(np.sum(matrix[neighbor[0], neighbor[1], :] - matrix[i, j, :])) / sigma)
+                    - (np.sqrt((np.power(neighbor[0] - i, 2) + np.power(neighbor[1] - j, 2))) / sigma_x))
+                sum_degree += adj_matrix[num_vertice, neighbor[2]]
+            degree_matrix[num_vertice, num_vertice] = sum_degree
+            num_vertice += 1
+    # apply paper research paper to create seg classes
+    # print(np.sort(np.unique(adj_matrix.flatten())))
+    # print(sc.sparse.csgraph.minimum_spanning_tree(adj_matrix))
+    return adj_matrix, degree_matrix
+
+
+def compute_euclidian_dist(x1, x2):
+    return np.sqrt(np.sum(np.power(x1 - x2, 2)))
 
 
 def compute_color_similarity(image, regions, region_i, region_j):
@@ -62,6 +124,5 @@ def hierarchical_grouping():
     print(similarity_regions)
 
 
-
 if __name__ == '__main__':
-    hierarchical_grouping()
+    graph_based_segmentation("aaa", "", 255, "", 1)
