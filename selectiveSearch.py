@@ -1,11 +1,10 @@
 import numpy as np
 from skimage.segmentation import felzenszwalb
 from skimage import data
-from skimage.color import rgb2yiq
 import collections
-from scipy import signal
 import scipy as sc
 import math as m
+
 
 def gaussian_kernel(k, s = 0.5):
     # generate a (2k+1)x(2k+1) gaussian kernel with mean=0 and sigma = s
@@ -24,7 +23,44 @@ def find_all_neigbors(x, y, height, width):
     return neighbors
 
 
-def graph_based_segmentation(image, scale, sigma, min_size, sigma_x):
+def compute_adjency_matrix(image, sigma, sigma_pos, scale=255):
+    height, width, deep = image.shape
+    adj_matrix = np.zeros((height * width, height * width))
+    num_vertice = 0
+    image = image / scale
+    seg_class = np.zeros((height*width, height*width))
+    for i in range(height):
+        for j in range(width):
+            sum_degree = 0
+            for neighbor in find_all_neigbors(i, j, height, width):
+                edge_weight = np.exp(
+                    -(m.fabs(np.sum(image[neighbor[0], neighbor[1], :] - image[i, j, :])) / sigma)
+                    - (np.sqrt((np.power(neighbor[0] - i, 2) + np.power(neighbor[1] - j, 2))) / sigma_pos))
+                adj_matrix[num_vertice, neighbor[2]] = edge_weight
+                adj_matrix[neighbor[2], num_vertice] = edge_weight
+                sum_degree += adj_matrix[num_vertice, neighbor[2]]
+            tmp_class = np.zeros(height * width)
+            tmp_class[num_vertice] = 1
+            seg_class[num_vertice, :] = tmp_class
+            num_vertice += 1
+    return adj_matrix, seg_class
+
+def check_class_matrix(seg_class, x, y):
+    tmp = None
+    for i in range(seg_class.shape[0]):
+        if i!= x or i!=y:
+            if tmp is None:
+                tmp = seg_class[i, :]
+            else:
+                tmp += seg_class[i, :]
+    print(tmp)
+    if np.amax(tmp) == 1:
+        print("hello")
+        return True
+    else:
+        return False
+
+def graph_based_segmentation(image, sigma, sigma_pos, scale=255):
     """
     Felzenszwalb segmentation
     :param image: a numpy array represents image with channel
@@ -36,32 +72,32 @@ def graph_based_segmentation(image, scale, sigma, min_size, sigma_x):
     [0 0 0 0]
     [0 0 0 0]
     [0 0 0 0]
-
-
     """
-    matrix = np.random.randint(255, size=(4, 4, 3))
-    height, width, deep = matrix.shape
-    adj_matrix = np.zeros((height*width, height*width))
-    num_vertice = 0
-    degree_matrix = np.zeros((height*width, height*width))
-    seg_class = [i for i in range(height*width)]
-    for i in range(height):
-        for j in range(width):
-            sum_degree = 0
-            for neighbor in find_all_neigbors(i, j, height, width):
-                adj_matrix[num_vertice, neighbor[2]] = np.exp(
-                    -(m.fabs(np.sum(matrix[neighbor[0], neighbor[1], :]-matrix[i, j, :]))/sigma)
-                    -(np.sqrt((np.power(neighbor[0]-i, 2)+np.power(neighbor[1]-j, 2)))/sigma_x))
-                adj_matrix[neighbor[2], num_vertice] = np.exp(
-                    -(m.fabs(np.sum(matrix[neighbor[0], neighbor[1], :] - matrix[i, j, :])) / sigma)
-                    - (np.sqrt((np.power(neighbor[0] - i, 2) + np.power(neighbor[1] - j, 2))) / sigma_x))
-                sum_degree += adj_matrix[num_vertice, neighbor[2]]
-            degree_matrix[num_vertice, num_vertice] = sum_degree
-            num_vertice += 1
-    # apply paper research paper to create seg classes
-    # print(np.sort(np.unique(adj_matrix.flatten())))
-    # print(sc.sparse.csgraph.minimum_spanning_tree(adj_matrix))
-    return adj_matrix, degree_matrix
+    height, width, deep = image.shape
+    adj_matrix, seg_class = compute_adjency_matrix(image, sigma, sigma_pos, scale)
+    # problem a resoudre verifier les classe sont toujours disjointe
+    for i in seg_class:
+        coord = np.where(adj_matrix == np.amax(adj_matrix))[0]
+        if check_class_matrix(seg_class, coord[0], coord[1]):
+            print("hello")
+            tmp = seg_class[coord[0]] + seg_class[coord[1]]
+            x_adj_matrix = y_adj_matrix = np.zeros((height * width, height * width))
+            for index in np.where(seg_class[coord[0]] == np.amax(seg_class[coord[0]]))[0]:
+                x_adj_matrix[index, :] = adj_matrix[index, :]
+            for index in np.where(seg_class[coord[1]] == np.amax(seg_class[coord[1]]))[0]:
+                y_adj_matrix[index, :] = adj_matrix[index, :]
+
+            #Minimum spanning tree for two class_matrix
+            x_adj_matrix_mst = sc.sparse.csgraph.minimum_spanning_tree(x_adj_matrix)
+            y_adj_matrix_mst = sc.sparse.csgraph.minimum_spanning_tree(y_adj_matrix)
+            c_1 = np.amax(x_adj_matrix_mst)
+            c_2 = np.amax(y_adj_matrix_mst)
+            tho = 1 / len(seg_class)
+            if min(c_1 + tho, c_2 + tho) >= np.amax(adj_matrix):
+                seg_class[coord[0]] = seg_class[coord[1]] = tmp
+        adj_matrix[coord[0], coord[1]] = adj_matrix[coord[1], coord[0]] = 0
+    print(seg_class)
+    return 0
 
 
 def compute_euclidian_dist(x1, x2):
@@ -125,4 +161,5 @@ def hierarchical_grouping():
 
 
 if __name__ == '__main__':
-    graph_based_segmentation("aaa", "", 255, "", 1)
+    image_sim = np.random.randint(255, size=(4, 4, 3))
+    graph_based_segmentation(image_sim, 1, 1)
