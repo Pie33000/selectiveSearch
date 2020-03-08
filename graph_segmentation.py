@@ -1,12 +1,18 @@
-import numpy as np
 import matplotlib.pyplot as plt
-from scipy.ndimage import gaussian_filter
+# from scipy.ndimage import gaussian_filter
 from skimage.io import imread
 from filter import *
 
 
 class universe:
+    """
+    Class to create disjoint component, using disjoint-set forest, union by rank and path compression
+    """
     def __init__(self, n_elements):
+        """
+        Constructor, creates a list of nodes, wti a rank, a size and link, by default path is set to node
+        :param n_elements:
+        """
         self.num = n_elements
         self.elts = np.empty(shape=(n_elements, 3), dtype=int)
         for i in range(n_elements):
@@ -15,12 +21,26 @@ class universe:
             self.elts[i, 2] = i  # p
 
     def size(self, x):
+        """
+        Return the size of a node, the numbers of child
+        :param x: the number of a node
+        :return:
+        """
         return self.elts[x, 1]
 
     def num_sets(self):
+        """
+        Return the number of edges by components
+        :return:
+        """
         return self.num
 
     def find(self, x):
+        """
+        Find a node
+        :param x: the number of a node
+        :return:
+        """
         y = int(x)
         while y != self.elts[y, 2]:
             y = self.elts[y, 2]
@@ -28,6 +48,12 @@ class universe:
         return y
 
     def join(self, x, y):
+        """
+        Join to nodes, itself
+        :param x:
+        :param y:
+        :return:
+        """
         if self.elts[x, 0] > self.elts[y, 0]:
             self.elts[y, 2] = x
             self.elts[x, 1] += self.elts[y, 1]
@@ -40,6 +66,10 @@ class universe:
 
 
 def random_rgb():
+    """
+    generate a random color for a disjoint component
+    :return:
+    """
     rgb = np.zeros(3, dtype=int)
     rgb[0] = np.random.randint(0, 255)
     rgb[1] = np.random.randint(0, 255)
@@ -48,14 +78,33 @@ def random_rgb():
 
 
 def compute_dissimilarity(x1, x2):
+    """
+    Compute dissimilarity between two nodes
+    :param x1: a node or pixel
+    :param x2: a node or pixel
+    :return: a dissimilarity score, when score is 0, pixels are both the same
+    """
     return np.sqrt(np.sum(np.power(x1 - x2, 2)))
 
 
 def get_threshold(size, c):
+    """
+    :param size:
+    :param c:
+    :return:
+    """
     return c / size
 
 
 def segment_graph(num_vertices, num_edges, edges, c):
+    """
+    Segment a graph
+    :param num_vertices: number of nodes
+    :param num_edges: number of edges
+    :param edges: list of edges
+    :param c: a constant c
+    :return: a universe object
+    """
     edges = edges[edges[:, 2].argsort()]
     u = universe(num_vertices)
     threshold = np.zeros(shape=num_vertices, dtype=float)
@@ -75,7 +124,15 @@ def segment_graph(num_vertices, num_edges, edges, c):
     return u
 
 
-def create_graph(in_image, sigma, k, min_size):
+def segment(in_image, sigma, k, min_size):
+    """
+    segment method, create graph from an image and laucnh segment graph_methods, show the result
+    :param in_image: source image a numpy array
+    :param sigma: sigma, which is the variance for gaussian smooth
+    :param k:
+    :param min_size: min nodes by component
+    :return:
+    """
     height, width, band = in_image.shape
     in_image_smooth = np.zeros((height, width, band))
     in_image_smooth[:, :, 0] = smooth(in_image[:, :, 0], sigma)
@@ -146,4 +203,4 @@ if __name__ == '__main__':
     k = 500
     min = 20
     in_image = imread("paris.jpg")
-    create_graph(in_image, sigma, k, min)
+    segment(in_image, sigma, k, min)
